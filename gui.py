@@ -1,53 +1,105 @@
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import messagebox, ttk
 
-PRIORITY_COLORS = {"High":"red","Medium":"orange","Low":"green"}
+# 핵심 매핑: 키(High/Medium/Low) → 별 표현
+PRIORITY_STARS = {
+    "High": "★★★",
+    "Medium": "★★",
+    "Low": "★"
+}
 
 class TodoGUI:
     def __init__(self, root, tasks, save_fn):
         self.tasks = tasks
         self.save_tasks = save_fn
 
-        frm = tk.Frame(root); frm.pack(padx=10,pady=10)
-        self.entry = tk.Entry(frm, width=25); self.entry.pack(side=tk.LEFT)
-        self.priority_var = tk.StringVar(value="Medium")
-        tk.OptionMenu(frm, self.priority_var, "High","Medium","Low").pack(side=tk.LEFT, padx=5)
-        tk.Button(frm, text="추가", command=self.add_task).pack(side=tk.LEFT, padx=5)
+        style = ttk.Style()
+        style.theme_use('clam')
+        style.configure('TButton', font=('Helvetica', 10, 'bold'), padding=6)
+        style.configure('Treeview', rowheight=24, font=('Helvetica', 10))
+        style.configure('Treeview.Heading', font=('Helvetica', 11, 'bold'))
 
-        self.lb = tk.Listbox(root, width=50, height=10); self.lb.pack(padx=10,pady=5)
-        self.lb.bind("<Double-1>", self.toggle_task)
-        tk.Button(root, text="삭제", command=self.delete_task).pack(pady=5)
+        top = ttk.Frame(root, padding=10)
+        top.pack(fill='x')
+
+        self.entry = ttk.Entry(top)
+        self.entry.pack(side='left', expand=True, fill='x')
+        self.entry.insert(0, '할 일을 입력하세요...')
+        self.entry.bind('<FocusIn>', lambda e: self.entry.delete(0, 'end'))
+
+        # 우선순위 키 저장: High/Medium/Low
+        self.priority_var = tk.StringVar(value='Medium')
+        ttk.OptionMenu(top, self.priority_var, 'High', 'Medium', 'Low')\
+            .pack(side='left', padx=8)
+
+        ttk.Button(top, text='추가', command=self.add_task).pack(side='left')
+
+        cols = ('완료', '중요도', '할일')
+        self.tree = ttk.Treeview(
+            root, columns=cols, show='headings', selectmode='extended'
+        )
+        for col in cols:
+            width = 60 if col != '할일' else 200
+            self.tree.heading(col, text=col)
+            self.tree.column(col, width=width, anchor='center')
+        self.tree.pack(padx=10, pady=10, expand=True, fill='both')
+        self.tree.bind('<Double-1>', self.toggle_task)
+
+        bottom = ttk.Frame(root, padding=(10, 0, 10, 10))
+        bottom.pack(fill='x')
+        ttk.Button(bottom, text='삭제', command=self.delete_task).pack(side='left')
+        ttk.Button(
+            bottom, text='완료된 항목 모두 삭제',
+            command=self.clear_completed
+        ).pack(side='right')
 
         self.refresh_list()
 
     def refresh_list(self):
-        self.lb.delete(0, tk.END)
-        for idx, t in enumerate(self.tasks):
-            prio = t.get("priority", "Medium")
-            mark = "[✔] " if t["done"] else "[ ] "
-            self.lb.insert(tk.END, f"{mark}[{prio}] {t['text']}")
-            self.lb.itemconfig(idx, fg=PRIORITY_COLORS.get(prio, "black"))
+        for iid in self.tree.get_children():
+            self.tree.delete(iid)
+        for t in self.tasks:
+            done_mark = '✔' if t['done'] else ''
+            key = t.get('priority', 'Medium')
+            # 키를 별 문자열로 매핑, 없으면 그대로
+            stars = PRIORITY_STARS.get(key, key)
+            text = t['text']
+            self.tree.insert(
+                '', 'end',
+                values=(done_mark, stars, text)
+            )
 
     def add_task(self):
         txt = self.entry.get().strip()
-        if not txt:
-            messagebox.showwarning("입력 오류","할 일을 입력하세요.")
+        if not txt or txt == '할 일을 입력하세요...':
+            messagebox.showwarning("입력 오류", "할 일을 입력하세요.")
             return
-        self.tasks.append({"text":txt,"done":False,"priority":self.priority_var.get()})
+        self.tasks.append({
+            'text': txt,
+            'done': False,
+            'priority': self.priority_var.get()  # "High"/"Medium"/"Low"
+        })
         self.save_tasks(self.tasks)
-        self.entry.delete(0,tk.END)
+        self.entry.delete(0, 'end')
         self.refresh_list()
 
-    def toggle_task(self,_):
-        idxs = self.lb.curselection()
-        if not idxs: return
-        i = idxs[0]
-        self.tasks[i]["done"] = not self.tasks[i]["done"]
+    def toggle_task(self, _):
+        sel = self.tree.selection()
+        for iid in sel:
+            idx = self.tree.index(iid)
+            self.tasks[idx]['done'] = not self.tasks[idx]['done']
         self.save_tasks(self.tasks)
         self.refresh_list()
 
     def delete_task(self):
-        for i in reversed(self.lb.curselection()):
-            del self.tasks[i]
+        sel = list(self.tree.selection())[::-1]
+        for iid in sel:
+            idx = self.tree.index(iid)
+            del self.tasks[idx]
+        self.save_tasks(self.tasks)
+        self.refresh_list()
+
+    def clear_completed(self):
+        self.tasks = [t for t in self.tasks if not t['done']]
         self.save_tasks(self.tasks)
         self.refresh_list()
