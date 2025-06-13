@@ -6,9 +6,10 @@ class TodoGUI:
         self.tasks = tasks
         self.save_tasks = save_fn
 
-     
-        frm = tk.Frame(root); frm.pack(padx=10, pady=10)
-        self.entry = tk.Entry(frm, width=30); self.entry.pack(side=tk.LEFT)
+        frm = tk.Frame(root)
+        frm.pack(padx=10, pady=10)
+        self.entry = tk.Entry(frm, width=30)
+        self.entry.pack(side=tk.LEFT)
         tk.Button(frm, text="추가", command=self.add_task).pack(side=tk.LEFT, padx=5)
 
         self.lb = tk.Listbox(root, width=40, height=10)
@@ -26,10 +27,21 @@ class TodoGUI:
             self.lb.insert(tk.END, mark + t.get("text", ""))
 
     def add_task(self):
-        pass
+        txt = self.entry.get().strip()
+        if not txt:
+            messagebox.showwarning("입력 오류", "할 일을 입력하세요.")
+            return
+        self.tasks.append({"text": txt, "done": False})
+        self.save_tasks(self.tasks)
+        self.entry.delete(0, tk.END)
+        self.refresh_list()
 
     def toggle_task(self, _event):
         pass
 
     def delete_task(self):
-        pass
+        idxs = self.lb.curselection()
+        for i in reversed(idxs):
+            del self.tasks[i]
+        self.save_tasks(self.tasks)
+        self.refresh_list()
